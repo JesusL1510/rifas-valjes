@@ -58,7 +58,7 @@
                 <button class="btn btn-sm btn-light rounded-pill mt-3 fw-bold px-3" onclick="agregarPremio()">+ Añadir Premio</button>
                 <div class="mt-3">
                     <span class="badge bg-white text-dark p-2 rounded-pill shadow-sm">
-                        Precio por Boleto: <span id="displayPrecio">$80</span>
+                        Precio por Boleto: <span id="displayPrecio">$0</span>
                     </span>
                 </div>
             </div>
@@ -125,13 +125,16 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    // USAR CLAVES ÚNICAS Y CARGAR AL INICIO
+    // CARGAR DATOS CON SOPORTE PARA PRECIO
     let rifaData = JSON.parse(localStorage.getItem('RIFA_DATA_STORAGE')) || {};
-    let rifaMeta = JSON.parse(localStorage.getItem('RIFA_META_STORAGE')) || { titulo: "MI GRAN SORTEO", premios: ["🎁 Premio Mayor"] };
+    let rifaMeta = JSON.parse(localStorage.getItem('RIFA_META_STORAGE')) || { 
+        titulo: "MI GRAN SORTEO", 
+        premios: ["🎁 Premio Mayor"],
+        precio: 50 // Precio inicial por defecto
+    };
     let multiMode = false;
     let seleccionados = [];
 
-    // Función para guardar TODO de forma segura
     function sincronizar() {
         localStorage.setItem('RIFA_DATA_STORAGE', JSON.stringify(rifaData));
         localStorage.setItem('RIFA_META_STORAGE', JSON.stringify(rifaMeta));
@@ -226,13 +229,18 @@
     }
 
     function actualizarUI() {
-        sincronizar(); // CADA VEZ QUE LA UI CAMBIA, SE ASEGURA EL LOCALSTORAGE
+        // CAPTURAR PRECIO Y GUARDAR EN META
+        const inputPrecio = document.getElementById('precioBoleto');
+        const precioActual = inputPrecio.value || 0;
+        rifaMeta.precio = precioActual;
+
+        sincronizar(); 
+        
         document.getElementById('tituloRifa').innerText = rifaMeta.titulo;
+        document.getElementById('displayPrecio').innerText = `$${precioActual}`;
         renderPremios();
         
         const tab = document.getElementById('tablero');
-        const precio = document.getElementById('precioBoleto').value || 0;
-        document.getElementById('displayPrecio').innerText = `$${precio}`;
         tab.innerHTML = '';
         let c = { disponible: 0, reservado: 0, pagado: 0 };
         
@@ -249,8 +257,8 @@
 
         document.getElementById('stats-container').innerHTML = `
             <div class="col-md-3 col-6"><div class="card p-3 shadow-sm">Total: <b>${Object.keys(rifaData).length}</b></div></div>
-            <div class="col-md-3 col-6"><div class="card p-3 shadow-sm text-success">Caja: <b>$${c.pagado * precio}</b></div></div>
-            <div class="col-md-3 col-6"><div class="card p-3 shadow-sm text-warning">Cobrar: <b>$${c.reservado * precio}</b></div></div>
+            <div class="col-md-3 col-6"><div class="card p-3 shadow-sm text-success">Caja: <b>$${c.pagado * precioActual}</b></div></div>
+            <div class="col-md-3 col-6"><div class="card p-3 shadow-sm text-warning">Cobrar: <b>$${c.reservado * precioActual}</b></div></div>
             <div class="col-md-3 col-6"><div class="card p-3 shadow-sm text-secondary">Libres: <b>${c.disponible}</b></div></div>
         `;
     }
@@ -292,15 +300,17 @@
 
     function limpiarTodo() { if(confirm("¿Borrar todo permanentemente?")) { localStorage.clear(); location.reload(); } }
 
-    // Cargar al inicio
     window.onload = () => {
+        // ASIGNAR PRECIO GUARDADO AL INPUT ANTES DE NADA
+        document.getElementById('precioBoleto').value = rifaMeta.precio;
+        
         if (Object.keys(rifaData).length === 0) ajustarCantidad();
         actualizarUI();
     };
 </script>
 
 <script>
-    // PWA CONFIG - MEJORADO PARA PERSISTENCIA
+    // PWA CONFIG
     const manifest = {
         "name": "Rifa Pro Gold",
         "short_name": "RIFAS",
