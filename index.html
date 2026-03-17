@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rifa Pro Gold: Cloud Edition</title>
+    
+    <meta name="theme-color" content="#6366f1">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3159/3159050.png">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f0f2f5; color: #1a1a1a; }
+        .card { border: none; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
+        .header-rifa {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white; border-radius: 20px; padding: 30px; margin-bottom: 25px;
+            text-align: center; position: relative; overflow: hidden;
+        }
+        .editable-text:hover { background: rgba(255,255,255,0.1); cursor: pointer; border-radius: 8px; }
+        .prize-list { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px; }
+        .prize-item {
+            background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(5px);
+            padding: 8px 15px; border-radius: 50px; font-size: 0.9rem;
+            display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.3);
+        }
+        .btn-remove-prize { background: none; border: none; color: #ff4d4d; font-weight: bold; cursor: pointer; }
+        .grid-rifa { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; }
+        .numero-card {
+            aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-radius: 15px; cursor: pointer; transition: 0.2s; 
+            border: 2px solid #e5e7eb; background: white; font-weight: 700; position: relative;
+        }
+        .numero-card:active { transform: scale(0.95); }
+        .estado-disponible { color: #9ca3af; border-style: dashed; }
+        .estado-reservado { background-color: #fbbf24 !important; border-color: #d97706 !important; color: #451a03; }
+        .estado-pagado { background-color: #10b981 !important; border-color: #059669 !important; color: white; }
+        .seleccionado { border: 4px solid #6366f1 !important; transform: scale(0.9); }
+        .badge-info { font-size: 0.6rem; margin-top: 5px; font-weight: 500; width: 85%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .oculto { display: none !important; }
+        #pwaInstallBtn { display: none; margin-bottom: 20px; }
+        #cloud-loader { position: fixed; top: 10px; right: 10px; z-index: 2000; display: block; } /* Mostrar por defecto hasta conectar */
+    </style>
+</head>
+<body>
+
+<div id="cloud-loader" class="badge bg-primary rounded-pill p-2 shadow">☁️ Sincronizando...</div>
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-11">
+            <button id="pwaInstallBtn" class="btn btn-dark w-100 rounded-pill fw-bold">📲 Instalar App de Rifa</button>
+
+            <div class="header-rifa shadow-sm">
+                <h1 class="fw-bold editable-text" id="tituloRifa" onclick="editarTitulo()">CARGANDO...</h1>
+                <div id="prizeContainer" class="prize-list"></div>
+                <button class="btn btn-sm btn-light rounded-pill mt-3 fw-bold px-3" onclick="agregarPremio()">+ Añadir Premio</button>
+                <div class="mt-3">
+                    <span class="badge bg-white text-dark p-2 rounded-pill shadow-sm">
+                        Precio por Boleto: <span id="displayPrecio">$50</span>
+                    </span>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-2 col-6">
+                            <label class="small fw-bold">Números</label>
+                            <input type="number" id="totalNumeros" class="form-control rounded-pill" value="100">
+                        </div>
+                        <div class="col-md-2 col-6">
+                            <label class="small fw-bold">Precio $</label>
+                            <input type="number" id="precioBoleto" class="form-control rounded-pill" value="50">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="small fw-bold">Buscador</label>
+                            <input type="text" id="buscador" class="form-control rounded-pill" placeholder="Buscar nombre o número..." oninput="filtrar()">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end gap-2">
+                            <button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="ajustarCantidad()">Generar</button>
+                            <button class="btn btn-dark w-100 rounded-pill fw-bold" onclick="exportarReporte()">📋 Reporte</button>
+                        </div>
+                    </div>
+                    <div class="row mt-3 border-top pt-3 text-center">
+                        <div class="col-12 d-flex gap-2 justify-content-center flex-wrap">
+                            <button id="btnMulti" class="btn btn-outline-primary rounded-pill btn-sm" onclick="toggleMultiSelect()">🖱️ Selección Múltiple: OFF</button>
+                            <button id="btnAsignar" class="btn btn-primary rounded-pill btn-sm d-none fw-bold" data-bs-toggle="modal" data-bs-target="#modalMulti">✍️ Venta Grupal (<span id="countSel">0</span>)</button>
+                            <button class="btn btn-outline-success rounded-pill btn-sm" onclick="descargarExcel()">📥 Respaldo CSV</button>
+                            <button class="btn btn-outline-danger rounded-pill btn-sm" onclick="limpiarTodo()">🗑️ Reiniciar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4 text-center" id="stats-container"></div>
+
+            <div class="d-grid gap-2 d-md-flex justify-content-md-center mb-4">
+                <button class="btn btn-warning btn-lg fw-bold px-5 shadow rounded-pill" onclick="sortearGanador()">🎲 SORTEAR GANADOR</button>
+            </div>
+
+            <div class="card mb-5">
+                <div class="card-body p-4">
+                    <div id="tablero" class="grid-rifa"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalMulti" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius: 20px;">
+      <div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold">Asignar Comprador</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label small fw-bold">Nombre</label><input type="text" id="multiNombre" class="form-control rounded-3" placeholder="Ej: Maria López"></div>
+        <div class="mb-3"><label class="form-label small fw-bold">Estado</label><select id="multiEstado" class="form-select rounded-3"><option value="reservado">⏳ Reservado</option><option value="pagado">✅ Pagado</option></select></div>
+      </div>
+      <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-primary w-100 rounded-pill fw-bold" onclick="confirmarAsignacionMulti()">Guardar Venta</button></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, doc, onSnapshot, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAmQuom7Xb-PevAH5qeeDVPS_-JDW7clX0",
+        authDomain: "rifas-a8763.firebaseapp.com",
+        projectId: "rifas-a8763",
+        storageBucket: "rifas-a8763.firebasestorage.app",
+        messagingSenderId: "632923637445",
+        appId: "1:632923637445:web:1f80c28d25d3552bb152ac"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const docRef = doc(db, "rifas", "rifa_jesval");
+
+    window.rifaData = {};
+    window.rifaMeta = { titulo: "MI GRAN SORTEO", premios: ["🎁 Premio Mayor"], precio: 50 };
+
+    // Listener en tiempo real corregido
+    onSnapshot(docRef, (snap) => {
+        const loader = document.getElementById('cloud-loader');
+        if (snap.exists()) {
+            const cloudData = snap.data();
+            window.rifaData = cloudData.datos || {};
+            window.rifaMeta = cloudData.meta || window.rifaMeta;
+            actualizarUI();
+            if(loader) loader.style.display = 'none';
+        } else {
+            console.log("El documento no existe, creando...");
+            window.guardarFirebase();
+        }
+    }, (error) => {
+        console.error("Error de Firebase:", error);
+        alert("Error de conexión o permisos. Revisa la consola.");
+    });
+
+    window.guardarFirebase = async () => {
+        const loader = document.getElementById('cloud-loader');
+        if(loader) loader.style.display = 'block';
+        try {
+            await setDoc(docRef, { 
+                datos: window.rifaData, 
+                meta: window.rifaMeta 
+            });
+            if(loader) loader.style.display = 'none';
+        } catch (e) {
+            console.error("Error al guardar:", e);
+        }
+    };
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // Lógica de la Interfaz (UI)
+    let multiMode = false;
+    let seleccionados = [];
+
+    function renderPremios() {
+        const container = document.getElementById('prizeContainer');
+        if(!container) return;
+        container.innerHTML = '';
+        rifaMeta.premios.forEach((p, index) => {
+            const div = document.createElement('div');
+            div.className = 'prize-item';
+            div.innerHTML = `<span>${p}</span><button class="btn-remove-prize" onclick="eliminarPremio(${index})">×</button>`;
+            container.appendChild(div);
+        });
+    }
+
+    async function agregarPremio() {
+        const p = prompt("Nombre del premio:");
+        if(p) { rifaMeta.premios.push(p); await window.guardarFirebase(); }
+    }
+
+    async function eliminarPremio(index) {
+        rifaMeta.premios.splice(index, 1);
+        await window.guardarFirebase();
+    }
+
+    async function editarTitulo() {
+        const n = prompt("Título:", rifaMeta.titulo);
+        if(n) { rifaMeta.titulo = n.toUpperCase(); await window.guardarFirebase(); }
+    }
+
+    function toggleMultiSelect() {
+        multiMode = !multiMode;
+        const btn = document.getElementById('btnMulti');
+        const btnAsignar = document.getElementById('btnAsignar');
+        if(multiMode) {
+            btn.innerText = "🖱️ Selección: ON";
+            btn.classList.replace('btn-outline-primary', 'btn-primary');
+            btnAsignar.classList.remove('d-none');
+        } else {
+            btn.innerText = "🖱️ Selección: OFF";
+            btn.classList.replace('btn-primary', 'btn-outline-primary');
+            btnAsignar.classList.add('d-none');
+            limpiarSeleccion();
+        }
+    }
+
+    function toggleNumero(num, element) {
+        const index = seleccionados.indexOf(num);
+        if(index > -1) { seleccionados.splice(index, 1); element.classList.remove('seleccionado'); }
+        else { seleccionados.push(num); element.classList.add('seleccionado'); }
+        document.getElementById('countSel').innerText = seleccionados.length;
+    }
+
+    async function confirmarAsignacionMulti() {
+        const nombre = document.getElementById('multiNombre').value.trim();
+        const estado = document.getElementById('multiEstado').value;
+        if(!nombre) return alert("Ingresa un nombre.");
+        seleccionados.forEach(num => { rifaData[num] = { nombre: nombre, estado: estado, fecha: new Date().toLocaleString() }; });
+        document.getElementById('multiNombre').value = "";
+        bootstrap.Modal.getInstance(document.getElementById('modalMulti')).hide();
+        toggleMultiSelect();
+        await window.guardarFirebase();
+    }
+
+    function limpiarSeleccion() {
+        seleccionados = [];
+        const counter = document.getElementById('countSel');
+        if(counter) counter.innerText = "0";
+        document.querySelectorAll('.numero-card').forEach(el => el.classList.remove('seleccionado'));
+    }
+
+    async function cicloEstado(num) {
+        if(multiMode) return;
+        const estados = ["disponible", "reservado", "pagado"];
+        rifaData[num].estado = estados[(estados.indexOf(rifaData[num].estado) + 1) % estados.length];
+        if(rifaData[num].estado === "disponible") { rifaData[num].nombre = ""; rifaData[num].fecha = ""; }
+        else if (!rifaData[num].fecha) { rifaData[num].fecha = new Date().toLocaleString(); }
+        await window.guardarFirebase();
+    }
+
+    async function editarNombre(num) {
+        if(multiMode) return;
+        let n = prompt(`Nombre para #${num}:`, rifaData[num].nombre);
+        if (n !== null) {
+            rifaData[num].nombre = n.trim();
+            if(n.trim() !== "" && rifaData[num].estado === "disponible") {
+                rifaData[num].estado = "reservado";
+                rifaData[num].fecha = new Date().toLocaleString();
+            }
+            await window.guardarFirebase();
+        }
+    }
+
+    function sortearGanador() {
+        const pagados = Object.keys(rifaData).filter(n => rifaData[n].estado === 'pagado');
+        if (pagados.length === 0) return alert("¡No hay números pagados!");
+        let i = 0;
+        let int = setInterval(() => {
+            document.getElementById('buscador').value = pagados[Math.floor(Math.random()*pagados.length)];
+            filtrar(); i++;
+            if(i > 25) {
+                clearInterval(int);
+                const g = pagados[Math.floor(Math.random()*pagados.length)];
+                alert(`🎉 GANADOR: Número ${g}\n👤 Comprador: ${rifaData[g].nombre}`);
+                document.getElementById('buscador').value = ""; filtrar();
+            }
+        }, 80);
+    }
+
+    function exportarReporte() {
+        let pagados = []; let reservados = []; let libres = 0;
+        const precio = rifaMeta.precio;
+        Object.keys(rifaData).sort((a, b) => a - b).forEach(n => {
+            const info = rifaData[n];
+            if (info.estado === 'pagado') pagados.push(` ✅ *#${n}* - ${info.nombre}`);
+            else if (info.estado === 'reservado') reservados.push(` ⏳ *#${n}* - ${info.nombre} (Debe $${precio})`);
+            else libres++;
+        });
+        let mensaje = `✨ *REPORTE: ${rifaMeta.titulo}* ✨\n🏆 *PREMIOS:* ${rifaMeta.premios.join(' | ')}\n──────────────\n🟢 Pagados: ${pagados.length}\n🟡 Reservados: ${reservados.length}\n⚪ Libres: ${libres}\n\n📥 Recaudado: *$${pagados.length * precio}*\n💸 Pendiente: *$${reservados.length * precio}*`;
+        navigator.clipboard.writeText(mensaje).then(() => alert("📋 Reporte copiado!"));
+    }
+
+    function descargarExcel() {
+        let csv = "Numero,Nombre,Estado,Fecha\n";
+        Object.keys(rifaData).sort((a,b)=>a-b).forEach(n => {
+            csv += `${n},"${rifaData[n].nombre}",${rifaData[n].estado},"${rifaData[n].fecha}"\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `backup_rifa.csv`;
+        link.click();
+    }
+
+    async function limpiarTodo() { 
+        if(confirm("¿Borrar todo de la NUBE?")) { 
+            window.rifaData = {}; 
+            await window.guardarFirebase(); 
+            location.reload(); 
+        } 
+    }
+
+    async function ajustarCantidad() {
+        const t = parseInt(document.getElementById('totalNumeros').value);
+        const p = document.getElementById('precioBoleto').value;
+        rifaMeta.precio = p;
+        for (let i = 1; i <= t; i++) {
+            if (!rifaData[i]) rifaData[i] = { nombre: "", estado: "disponible", fecha: "" };
+        }
+        await window.guardarFirebase();
+    }
+
+    function filtrar() {
+        const t = document.getElementById('buscador').value.toLowerCase();
+        document.querySelectorAll('.numero-card').forEach(d => {
+            d.classList.toggle('oculto', !(d.dataset.num.includes(t) || d.dataset.nombre.toLowerCase().includes(t)));
+        });
+    }
+
+    function actualizarUI() {
+        document.getElementById('tituloRifa').innerText = rifaMeta.titulo;
+        document.getElementById('precioBoleto').value = rifaMeta.precio;
+        document.getElementById('displayPrecio').innerText = `$${rifaMeta.precio}`;
+        renderPremios();
+
+        const tab = document.getElementById('tablero');
+        tab.innerHTML = '';
+        let c = { disponible: 0, reservado: 0, pagado: 0 };
+        
+        Object.keys(rifaData).sort((a,b)=>a-b).forEach(num => {
+            const info = rifaData[num]; c[info.estado]++;
+            const div = document.createElement('div');
+            div.className = `numero-card estado-${info.estado}`;
+            div.dataset.num = num; div.dataset.nombre = info.nombre;
+            div.innerHTML = `<span>${num}</span>${info.nombre ? `<span class="badge-info text-center">${info.nombre}</span>`:''}`;
+            div.onclick = () => multiMode ? toggleNumero(num, div) : setTimeout(() => editarNombre(num), 200);
+            div.ondblclick = () => !multiMode && cicloEstado(num);
+            tab.appendChild(div);
+        });
+
+        document.getElementById('stats-container').innerHTML = `
+            <div class="col-md-3 col-6"><div class="card p-3 shadow-sm">Total: <b>${Object.keys(rifaData).length}</b></div></div>
+            <div class="col-md-3 col-6"><div class="card p-3 shadow-sm text-success">Caja: <b>$${c.pagado * rifaMeta.precio}</b></div></div>
+            <div class="col-md-3 col-6"><div class="card p-3 shadow-sm text-warning">Por cobrar: <b>$${c.reservado * rifaMeta.precio}</b></div></div>
+            <div class="col-md-3 col-6"><div class="card p-3 shadow-sm text-secondary">Libres: <b>${c.disponible}</b></div></div>
+        `;
+    }
+</script>
+
+<script>
+    // PWA Manifest dinámico
+    const manifest = {
+        "name": "RIFAS - JESVAL",
+        "short_name": "RIFAS",
+        "start_url": "./",
+        "display": "standalone",
+        "background_color": "#f0f2f5",
+        "theme_color": "#6366f1",
+        "icons": [{
+            "src": "https://cdn-icons-png.flaticon.com/512/3159/3159050.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    const manifestLink = document.createElement('link');
+    manifestLink.rel = 'manifest';
+    manifestLink.href = URL.createObjectURL(manifestBlob);
+    document.head.appendChild(manifestLink);
+
+    // Service Worker Simple para PWA
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./', { scope: './' })
+            .catch(err => console.log("SW omitido"));
+        });
+    }
+
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        const btn = document.getElementById('pwaInstallBtn');
+        if(btn) btn.style.display = 'block';
+    });
+
+    document.getElementById('pwaInstallBtn').addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt = null;
+            document.getElementById('pwaInstallBtn').style.display = 'none';
+        }
+    });
+</script>
+</body>
+</html>
